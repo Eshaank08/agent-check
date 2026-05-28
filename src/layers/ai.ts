@@ -5,7 +5,8 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import type { AgentMetadata, StaticFinding, AIAnalysis } from '../types';
-import { MODEL_CATALOG, estimateMonthlyCost, formatCost } from '../models/recommendations';
+import { MODEL_CATALOG, estimateMonthlyCost, formatCost, applyLiveUpdates } from '../models/recommendations';
+import { fetchLiveModelUpdates, type LiveModelUpdate } from '../models/crawler';
 
 const MODEL = 'claude-sonnet-4-6';
 // Estimated tokens per audit call — used for cost projection in model recommendations.
@@ -72,18 +73,25 @@ function buildStaticSummary(findings: StaticFinding[]): string {
   return lines.join('\n');
 }
 
-function buildModelCatalog(callsPerDay: number): string {
-  const lines: string[] = ['MODEL CATALOG (for recommendations):'];
-  for (const spec of MODEL_CATALOG) {
+function buildModelCatalog(callsPerDay: number, liveUpdates: LiveModelUpdate[] | null): string {
+  const catalog = liveUpdates ? applyLiveUpdates(liveUpdates) : MODEL_CATALOG;
+  const pricingTag = liveUpdates ? '[live]' : '[static]';
+  const lines: string[] = [`MODEL CATALOG ${pricingTag} (for recommendations):`];
+
+  for (const spec of catalog) {
     const cost = estimateMonthlyCost(spec, AVG_INPUT_TOKENS, AVG_OUTPUT_TOKENS, callsPerDay);
+    const liveUpdate = liveUpdates?.find((u) => u.staticId === spec.id);
+    const computeNote = liveUpdate?.computeEstimate
+      ? ` | compute (self-host): ${liveUpdate.computeEstimate}`
+      : '';
     lines.push(
-      `  - ${spec.id} (${spec.provider}): ${formatCost(cost)} at ${callsPerDay} calls/day | tier: ${spec.tier} | GDPR: ${spec.gdprFriendly ? 'yes' : 'no'} | self-hostable: ${spec.selfHostable ? 'yes' : 'no'}`
+      `  - ${spec.id} (${spec.provider}): ${formatCost(cost)} at ${callsPerDay} calls/day | tier: ${spec.tier} | GDPR: ${spec.gdprFriendly ? 'yes' : 'no'} | self-hostable: ${spec.selfHostable ? 'yes' : 'no'}${computeNote}`
     );
   }
   return lines.join('\n');
 }
 
-function buildPrompt(metadata: AgentMetadata, findings: StaticFinding[]): string {
+function buildPrompt(metadata: AgentMetadata, findings: StaticFinding[], liveUpdates: LiveModelUpdate[] | null): string {
   const callsPerDay = metadata.callsPerDay ?? 100;
 
   return `You are an expert AI security reviewer and architect. Analyze this AI agent and return a structured JSON assessment.
@@ -92,7 +100,7 @@ ${buildMetadataSummary(metadata)}
 
 ${buildStaticSummary(findings)}
 
-${buildModelCatalog(callsPerDay)}
+${buildModelCatalog(callsPerDay, liveUpdates)}
 
 Analyze the agent and return ONLY a valid JSON object with this exact structure:
 {
@@ -114,7 +122,8 @@ Analyze the agent and return ONLY a valid JSON object with this exact structure:
       "provider": "provider name",
       "estimatedMonthlyCost": "formatted cost string",
       "qualityMatch": "e.g. 95% quality match for this task type",
-      "reasoning": "one sentence on why this model fits"
+      "reasoning": "one sentence on why this model fits",
+      "computeRequirement": "only set for self-hostable models — GPU/VRAM spec from catalog, else omit"
     }
   ],
   "mostCriticalFix": "The single most important security or reliability issue to fix immediately, in one sentence.",
@@ -159,7 +168,11 @@ export async function runAiAnalysis(
 
   const client = new Anthropic({ apiKey });
 
-  const prompt = buildPrompt(metadata, findings);
+  // Fetch live model pricing (free, no key, 5s timeout) — falls back silently
+  const liveUpdates = await fetchLiveModelUpdates();
+  const pricingDataSource: 'live' | 'static' = liveUpdates ? 'live' : 'static';
+
+  const prompt = buildPrompt(metadata, findings, liveUpdates);
 
   let rawContent: string;
 
@@ -193,6 +206,7 @@ export async function runAiAnalysis(
   parsed.permissionIssues = Array.isArray(parsed.permissionIssues) ? parsed.permissionIssues : [];
   parsed.modelRecommendations = Array.isArray(parsed.modelRecommendations) ? parsed.modelRecommendations : [];
   parsed.mostCriticalFix = parsed.mostCriticalFix ?? 'No critical fix identified.';
+  parsed.pricingDataSource = pricingDataSource;
   parsed.securityScore = clampScore(parsed.securityScore, 0, 10);
   parsed.performanceScore = clampScore(parsed.performanceScore, 0, 10);
   parsed.costEfficiencyScore = clampScore(parsed.costEfficiencyScore, 0, 10);

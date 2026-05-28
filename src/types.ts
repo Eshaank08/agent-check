@@ -26,6 +26,9 @@ export interface AgentMetadata {
   hasErrorHandling?: boolean;
   hasRateLimiting?: boolean;
   hasOutputValidation?: boolean;
+  hasAuditLogging?: boolean;
+  hasInputValidation?: boolean;
+  hasToolTimeout?: boolean;
   potentialSecrets?: SecretHit[];
   source: 'scan' | 'interactive';
   filesScanned?: number;
@@ -53,6 +56,7 @@ export interface ModelRecommendation {
   estimatedMonthlyCost: string;
   qualityMatch: string;
   reasoning: string;
+  computeRequirement?: string;  // GPU/VRAM estimate for self-hosted models
 }
 
 export interface AIAnalysis {
@@ -66,6 +70,7 @@ export interface AIAnalysis {
   performanceScore: number;
   costEfficiencyScore: number;
   overallScore: number;
+  pricingDataSource?: 'live' | 'static';
 }
 
 export interface AuditOptions {

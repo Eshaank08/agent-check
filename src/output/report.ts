@@ -128,6 +128,12 @@ function printModelSection(ai: AIAnalysis, currentModel?: string): void {
   console.log(chalk.bold.white('MODEL RECOMMENDATION'));
   console.log(chalk.dim(DIVIDER));
 
+  const pricingNote = ai.pricingDataSource === 'live'
+    ? chalk.green('  ✦ Pricing: live data from OpenRouter')
+    : chalk.dim('  ✦ Pricing: static catalog (live fetch unavailable)');
+  console.log(pricingNote);
+  console.log('');
+
   if (currentModel) {
     console.log(`  ${chalk.dim('Current:    ')} ${chalk.white(currentModel)}`);
     console.log('');
@@ -139,6 +145,9 @@ function printModelSection(ai: AIAnalysis, currentModel?: string): void {
     console.log(`  ${tag}`);
     console.log(`  ${chalk.bold(rec.model)} ${chalk.dim(`(${rec.provider})`)}  ${chalk.yellow(rec.estimatedMonthlyCost)}`);
     console.log(`  ${chalk.dim(rec.qualityMatch)} — ${rec.reasoning}`);
+    if (rec.computeRequirement) {
+      console.log(`  ${chalk.dim('Compute:    ')} ${rec.computeRequirement}`);
+    }
     console.log('');
   }
 }

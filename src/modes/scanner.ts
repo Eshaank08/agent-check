@@ -85,6 +85,42 @@ const RATE_LIMIT_PATTERNS = [
   /backoff/i,
 ];
 
+// Audit logging patterns (OAA-12)
+const AUDIT_LOG_PATTERNS = [
+  /audit.?log/i,
+  /event.?log/i,
+  /log.?event/i,
+  /access.?log/i,
+  /action.?log/i,
+  /record.?action/i,
+  /log_tool/i,
+  /tool.?log/i,
+];
+
+// Input validation / schema validation patterns (OAA-13)
+const INPUT_VALIDATION_PATTERNS = [
+  /validate.?input/i,
+  /input.?schema/i,
+  /sanitize/i,
+  /input.?valid/i,
+  /zod\./,
+  /pydantic/i,
+  /jsonschema/i,
+  /schema\.parse/i,
+  /t\.string\(\)|t\.object\(/,
+];
+
+// Tool timeout patterns (OAA-14)
+const TOOL_TIMEOUT_PATTERNS = [
+  /timeout/i,
+  /time.?limit/i,
+  /max.?duration/i,
+  /deadline/i,
+  /AbortController/,
+  /signal\.abort/i,
+  /asyncio\.wait_for/i,
+];
+
 // Sub-agent patterns
 const SUB_AGENT_PATTERNS = [
   /sub.?agent/i,
@@ -263,6 +299,9 @@ export async function scanDirectory(scanPath: string): Promise<AgentMetadata> {
   let hasErrorHandling = false;
   let hasRateLimiting = false;
   let hasOutputValidation = false;
+  let hasAuditLogging = false;
+  let hasInputValidation = false;
+  let hasToolTimeout = false;
   let systemPromptPresent = false;
   let agentName: string | undefined;
   let agentDescription: string | undefined;
@@ -320,6 +359,9 @@ export async function scanDirectory(scanPath: string): Promise<AgentMetadata> {
     if (!hasErrorHandling) hasErrorHandling = booleanCheck(content, ERROR_PATTERNS);
     if (!hasRateLimiting) hasRateLimiting = booleanCheck(content, RATE_LIMIT_PATTERNS);
     if (!hasOutputValidation) hasOutputValidation = booleanCheck(content, OUTPUT_VALIDATION_PATTERNS);
+    if (!hasAuditLogging) hasAuditLogging = booleanCheck(content, AUDIT_LOG_PATTERNS);
+    if (!hasInputValidation) hasInputValidation = booleanCheck(content, INPUT_VALIDATION_PATTERNS);
+    if (!hasToolTimeout) hasToolTimeout = booleanCheck(content, TOOL_TIMEOUT_PATTERNS);
 
     // System prompt detection
     if (!systemPromptPresent) {
@@ -374,6 +416,9 @@ export async function scanDirectory(scanPath: string): Promise<AgentMetadata> {
     hasErrorHandling,
     hasRateLimiting,
     hasOutputValidation,
+    hasAuditLogging,
+    hasInputValidation,
+    hasToolTimeout,
     systemPromptPresent,
     potentialSecrets: allSecrets,
     source: 'scan',

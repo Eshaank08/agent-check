@@ -167,3 +167,22 @@ export function formatCost(usd: number): string {
 export function getModelById(id: string): ModelSpec | undefined {
   return MODEL_CATALOG.find((m) => m.id === id);
 }
+
+/**
+ * Returns a new catalog with live pricing applied where available.
+ * Models not covered by live data keep their static pricing.
+ */
+export function applyLiveUpdates(
+  updates: import('./crawler').LiveModelUpdate[]
+): ModelSpec[] {
+  return MODEL_CATALOG.map((spec) => {
+    const update = updates.find((u) => u.staticId === spec.id);
+    if (!update) return spec;
+    return {
+      ...spec,
+      inputCostPerMillion: update.inputCostPerMillion,
+      outputCostPerMillion: update.outputCostPerMillion,
+      contextWindow: update.contextWindow,
+    };
+  });
+}

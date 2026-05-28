@@ -149,3 +149,83 @@ describe('runStaticAnalysis — OAA-07: sub-agent permissions', () => {
     assert.ok(f?.passed, 'OAA-07 should pass with no sub-agents');
   });
 });
+
+describe('runStaticAnalysis — OAA-11: self-modifying agent', () => {
+  it('flags CRITICAL when tool name suggests writing to system prompt', () => {
+    const metadata = makeMetadata({
+      tools: [{ name: 'update_system_prompt', permissions: ['write'] }],
+    });
+    const findings = runStaticAnalysis(metadata);
+    const f = findingFor(findings, 'OAA-11');
+    assert.ok(f && !f.passed, 'OAA-11 should fail');
+    assert.equal(f!.severity, 'CRITICAL');
+  });
+
+  it('passes for a normal write tool', () => {
+    const metadata = makeMetadata({
+      tools: [{ name: 'save_document', permissions: ['write'] }],
+    });
+    const findings = runStaticAnalysis(metadata);
+    const f = findingFor(findings, 'OAA-11');
+    assert.ok(f?.passed, 'OAA-11 should pass for unrelated write tool');
+  });
+});
+
+describe('runStaticAnalysis — OAA-14: tool timeout', () => {
+  it('flags HIGH in interactive mode with external tool and no timeout confirmed', () => {
+    const metadata = makeMetadata({
+      tools: [{ name: 'fetch_data', permissions: ['read'] }],
+      source: 'interactive',
+    });
+    const findings = runStaticAnalysis(metadata);
+    const f = findingFor(findings, 'OAA-14');
+    assert.ok(f && !f.passed, 'OAA-14 should fail with external tool');
+    assert.equal(f!.severity, 'HIGH');
+  });
+
+  it('passes in scan mode when timeout pattern detected', () => {
+    const metadata = makeMetadata({
+      tools: [{ name: 'api_call', permissions: ['read'] }],
+      source: 'scan',
+      hasToolTimeout: true,
+    });
+    const findings = runStaticAnalysis(metadata);
+    const f = findingFor(findings, 'OAA-14');
+    assert.ok(f?.passed, 'OAA-14 should pass when timeout detected in scan');
+  });
+});
+
+describe('runStaticAnalysis — OAA-15: non-idempotent writes', () => {
+  it('flags MEDIUM for accumulating tool names', () => {
+    const metadata = makeMetadata({
+      tools: [{ name: 'append_to_log', permissions: ['write'] }],
+    });
+    const findings = runStaticAnalysis(metadata);
+    const f = findingFor(findings, 'OAA-15');
+    assert.ok(f && !f.passed, 'OAA-15 should fail for append tool');
+    assert.equal(f!.severity, 'MEDIUM');
+  });
+});
+
+describe('runStaticAnalysis — OAA-16: context window overflow', () => {
+  it('flags MEDIUM when agent has more than 15 tools', () => {
+    const manyTools = Array.from({ length: 16 }, (_, i) => ({
+      name: `tool_${i}`,
+      permissions: ['read' as const],
+    }));
+    const metadata = makeMetadata({ tools: manyTools });
+    const findings = runStaticAnalysis(metadata);
+    const f = findingFor(findings, 'OAA-16');
+    assert.ok(f && !f.passed, 'OAA-16 should fail with 16 tools');
+    assert.equal(f!.severity, 'MEDIUM');
+  });
+
+  it('passes when tool count is within limits', () => {
+    const metadata = makeMetadata({
+      tools: [{ name: 'tool_a', permissions: ['read'] }],
+    });
+    const findings = runStaticAnalysis(metadata);
+    const f = findingFor(findings, 'OAA-16');
+    assert.ok(f?.passed, 'OAA-16 should pass with few tools');
+  });
+});

@@ -312,6 +312,224 @@ function checkRateLimiting(metadata: AgentMetadata): StaticFinding {
   return passed('OAA-10', 'Rate Limiting', 'Rate limiting detected or no external API tools found.');
 }
 
+// OAA-11: Self-modifying Agent
+function checkSelfModification(metadata: AgentMetadata): StaticFinding {
+  const selfModKeywords = ['system_prompt', 'update_prompt', 'set_instruction', 'modify_config', 'write_config', 'patch_agent', 'update_system', 'set_system'];
+  const dangerous = metadata.tools.filter((t) => {
+    const name = t.name.toLowerCase();
+    return selfModKeywords.some((kw) => name.includes(kw)) ||
+      (t.permissions.includes('write') && ['prompt', 'instruction', 'config', 'system'].some((kw) => name.includes(kw)));
+  });
+
+  if (dangerous.length > 0) {
+    return finding(
+      'OAA-11',
+      'CRITICAL',
+      'Self-modifying Agent Risk',
+      `Tool(s) "${dangerous.map((t) => t.name).join(', ')}" can write to agent instructions or configuration. A compromised agent could rewrite its own behavior.`,
+      dangerous.map((t) => t.name).join(', ')
+    );
+  }
+  return passed('OAA-11', 'Self-modification', 'No tools detected that can modify agent instructions or configuration.');
+}
+
+// OAA-12: No Audit Logging
+function checkAuditLogging(metadata: AgentMetadata): StaticFinding {
+  const sensitiveTools = metadata.tools.filter((t) =>
+    t.permissions.some((p) => ['write', 'delete', 'execute'].includes(p))
+  );
+  if (sensitiveTools.length === 0) {
+    return passed('OAA-12', 'Audit Logging', 'No write/delete/execute tools to audit.');
+  }
+
+  if (metadata.source === 'scan') {
+    if (!metadata.hasAuditLogging) {
+      return finding(
+        'OAA-12',
+        'HIGH',
+        'No Audit Logging Detected',
+        `Agent has ${sensitiveTools.length} write/delete/execute tool(s) but no audit logging patterns found. State-changing calls are untracked.`,
+        sensitiveTools.map((t) => t.name).join(', ')
+      );
+    }
+    return passed('OAA-12', 'Audit Logging', 'Audit logging patterns detected.');
+  }
+
+  // Interactive mode: flag as unconfirmed — we can't know from Q&A alone
+  return finding(
+    'OAA-12',
+    'HIGH',
+    'Audit Logging Not Confirmed',
+    `Agent has ${sensitiveTools.length} write/delete/execute tool(s). Confirm all state-changing calls are logged with timestamp, sanitized input, and outcome.`,
+    sensitiveTools.map((t) => t.name).join(', ')
+  );
+}
+
+// OAA-13: Missing Input Validation
+function checkInputValidation(metadata: AgentMetadata): StaticFinding {
+  const hasRiskyTools = metadata.tools.some((t) =>
+    t.permissions.some((p) => ['write', 'delete', 'execute'].includes(p))
+  );
+  if (!hasRiskyTools) {
+    return passed('OAA-13', 'Input Validation', 'No write/execute tools detected that require strict input validation.');
+  }
+
+  if (metadata.source === 'scan') {
+    if (!metadata.hasInputValidation) {
+      return finding(
+        'OAA-13',
+        'MEDIUM',
+        'No Input Validation Detected',
+        'Agent has write/execute tools but no input validation or schema patterns found. Malformed inputs can reach tools directly.',
+        'Source files analyzed'
+      );
+    }
+    return passed('OAA-13', 'Input Validation', 'Input validation patterns detected.');
+  }
+
+  return finding(
+    'OAA-13',
+    'MEDIUM',
+    'Input Validation Not Confirmed',
+    'Agent has write/execute tools but input validation was not confirmed. Without schema validation, malformed inputs can reach tools directly.',
+    'Write/execute tools present'
+  );
+}
+
+// OAA-14: No Tool Timeout
+function checkToolTimeout(metadata: AgentMetadata): StaticFinding {
+  const externalTools = metadata.tools.filter((t) =>
+    ['api', 'http', 'fetch', 'web', 'search', 'browse', 'request', 'call'].some((kw) =>
+      t.name.toLowerCase().includes(kw)
+    )
+  );
+  if (externalTools.length === 0) {
+    return passed('OAA-14', 'Tool Timeout', 'No external API tools detected.');
+  }
+
+  if (metadata.source === 'scan') {
+    if (!metadata.hasToolTimeout) {
+      return finding(
+        'OAA-14',
+        'HIGH',
+        'No Tool Timeout Detected',
+        `${externalTools.length} external tool(s) found but no timeout patterns detected. A network failure can stall the agent indefinitely.`,
+        externalTools.map((t) => t.name).join(', ')
+      );
+    }
+    return passed('OAA-14', 'Tool Timeout', 'Timeout patterns detected for external tool calls.');
+  }
+
+  return finding(
+    'OAA-14',
+    'HIGH',
+    'Tool Timeout Not Confirmed',
+    `${externalTools.length} external tool(s) detected but no timeout configuration was confirmed. A hanging call can block the agent indefinitely.`,
+    externalTools.map((t) => t.name).join(', ')
+  );
+}
+
+// OAA-15: Non-idempotent Write Operations
+function checkIdempotency(metadata: AgentMetadata): StaticFinding {
+  // Look for tool names that suggest accumulating/appending operations (inherently non-idempotent)
+  const nonIdempotentTools = metadata.tools.filter((t) => {
+    const name = t.name.toLowerCase();
+    return ['append', 'increment', 'add_to', 'push', 'insert'].some((kw) => name.includes(kw));
+  });
+
+  if (nonIdempotentTools.length > 0) {
+    return finding(
+      'OAA-15',
+      'MEDIUM',
+      'Potentially Non-idempotent Operations',
+      `Tool(s) "${nonIdempotentTools.map((t) => t.name).join(', ')}" suggest accumulating operations. Retries or duplicate calls could corrupt data. Ensure idempotency keys are used.`,
+      nonIdempotentTools.map((t) => t.name).join(', ')
+    );
+  }
+  return passed('OAA-15', 'Idempotency', 'No non-idempotent accumulation patterns detected.');
+}
+
+// OAA-16: Context Window Overflow Risk
+const TOOL_COUNT_WARNING_THRESHOLD = 15;
+function checkContextOverflow(metadata: AgentMetadata): StaticFinding {
+  if (metadata.tools.length > TOOL_COUNT_WARNING_THRESHOLD) {
+    return finding(
+      'OAA-16',
+      'MEDIUM',
+      'Context Window Overflow Risk',
+      `Agent has ${metadata.tools.length} tools. At this scale, tool definitions alone can consume a significant portion of the context window, degrading reasoning quality and increasing cost.`,
+      `${metadata.tools.length} tools registered`
+    );
+  }
+  return passed('OAA-16', 'Context Window', `Tool count (${metadata.tools.length}) is within safe limits.`);
+}
+
+// OAA-17: No Fallback Model
+function checkFallbackModel(metadata: AgentMetadata): StaticFinding {
+  // Only meaningful when we know calls per day (higher volume = higher availability risk)
+  const highVolume = metadata.callsPerDay !== undefined && metadata.callsPerDay > 200;
+  if (highVolume && metadata.source === 'interactive') {
+    return finding(
+      'OAA-17',
+      'LOW',
+      'No Fallback Model',
+      `Agent runs ${metadata.callsPerDay} calls/day with no confirmed fallback model. Primary model unavailability causes total agent failure. Consider a secondary model for degraded-mode operation.`,
+      'High call volume, single model dependency'
+    );
+  }
+  return passed('OAA-17', 'Fallback Model', 'Low call volume or fallback not required at this scale.');
+}
+
+// OAA-18: Missing Session Isolation
+function checkSessionIsolation(metadata: AgentMetadata): StaticFinding {
+  const dataAccessTools = metadata.tools.filter((t) =>
+    ['crm', 'user', 'customer', 'profile', 'account', 'record', 'tenant', 'member'].some((kw) =>
+      t.name.toLowerCase().includes(kw)
+    )
+  );
+
+  if (dataAccessTools.length === 0) {
+    return passed('OAA-18', 'Session Isolation', 'No multi-tenant data access tools detected.');
+  }
+
+  if (metadata.source === 'scan') {
+    return passed('OAA-18', 'Session Isolation', 'Data access tools present — verify tenant/user scoping manually.');
+  }
+
+  return finding(
+    'OAA-18',
+    'HIGH',
+    'Session Isolation Not Confirmed',
+    `Tool(s) "${dataAccessTools.map((t) => t.name).join(', ')}" access user or customer data. Without user_id/tenant_id scoping, one session could access another user's data.`,
+    dataAccessTools.map((t) => t.name).join(', ')
+  );
+}
+
+// OAA-19: Unconstrained Memory Retention
+function checkMemoryRetention(metadata: AgentMetadata): StaticFinding {
+  const memoryTools = metadata.tools.filter((t) =>
+    ['memory', 'store', 'vector', 'cache', 'history', 'knowledge', 'context_store'].some((kw) =>
+      t.name.toLowerCase().includes(kw)
+    )
+  );
+
+  if (memoryTools.length === 0) {
+    return passed('OAA-19', 'Memory Retention', 'No persistent memory or vector store tools detected.');
+  }
+
+  if (metadata.source === 'scan') {
+    return passed('OAA-19', 'Memory Retention', 'Memory tools detected — verify TTL and cleanup policy manually.');
+  }
+
+  return finding(
+    'OAA-19',
+    'MEDIUM',
+    'Unconstrained Memory Retention',
+    `Tool(s) "${memoryTools.map((t) => t.name).join(', ')}" store data but no TTL or cleanup policy was confirmed. Without expiry, sensitive data accumulates indefinitely.`,
+    memoryTools.map((t) => t.name).join(', ')
+  );
+}
+
 // Calculate static scores without AI
 export function computeStaticScores(findings: StaticFinding[]): {
   securityScore: number;
@@ -357,6 +575,15 @@ export function runStaticAnalysis(metadata: AgentMetadata): StaticFinding[] {
   findings.push(checkOutputValidation(metadata));
   findings.push(checkPiiExposure(metadata));
   findings.push(checkRateLimiting(metadata));
+  findings.push(checkSelfModification(metadata));
+  findings.push(checkAuditLogging(metadata));
+  findings.push(checkInputValidation(metadata));
+  findings.push(checkToolTimeout(metadata));
+  findings.push(checkIdempotency(metadata));
+  findings.push(checkContextOverflow(metadata));
+  findings.push(checkFallbackModel(metadata));
+  findings.push(checkSessionIsolation(metadata));
+  findings.push(checkMemoryRetention(metadata));
 
   return findings;
 }
