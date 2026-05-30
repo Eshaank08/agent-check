@@ -16,6 +16,7 @@ ${chalk.bold('Usage:')}
 ${chalk.bold('Options:')}
   --path <dir>   Path to agent source directory
   --no-ai        Run static analysis only (no Anthropic API key needed)
+  --json         Output raw JSON (useful for CI pipelines and scripting)
   --version      Print version
   --help         Show this help
 
@@ -37,6 +38,7 @@ function parseArgs(argv: string[]): { command: string | null; options: AuditOpti
 
   const options: AuditOptions = {
     noAi: args.includes('--no-ai'),
+    json: args.includes('--json'),
   };
 
   const pathIndex = args.indexOf('--path');

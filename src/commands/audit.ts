@@ -67,5 +67,10 @@ export async function runAudit(options: AuditOptions): Promise<void> {
     timestamp: new Date().toISOString(),
   };
 
+  if (options.json) {
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+    return;
+  }
+
   printReport(result);
 }

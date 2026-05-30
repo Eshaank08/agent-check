@@ -76,6 +76,7 @@ export interface AIAnalysis {
 export interface AuditOptions {
   path?: string;
   noAi: boolean;
+  json?: boolean;
 }
 
 export interface AuditResult {
