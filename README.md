@@ -5,7 +5,7 @@ Open source CLI that audits AI agents for security vulnerabilities, performance 
 ## Quick Start
 
 ```bash
-npx agentcheck audit
+npx @eshaank08/agentcheck audit
 ```
 
 No API key required for static analysis.
@@ -19,7 +19,7 @@ No API key required for static analysis.
 Answer a few structured questions about your agent in the terminal. No source code required.
 
 ```bash
-npx agentcheck audit
+npx @eshaank08/agentcheck audit
 ```
 
 AgentCheck will ask about:
@@ -35,8 +35,8 @@ AgentCheck will ask about:
 Point AgentCheck at your agent source directory. It recursively scans `.py`, `.ts`, `.js`, `.json`, `.yaml`, and `.env` files, extracts structural metadata, and runs analysis — without sending your code to any external service.
 
 ```bash
-npx agentcheck audit --path ./my-agent
-npx agentcheck audit --path /home/user/projects/crm-agent
+npx @eshaank08/agentcheck audit --path ./my-agent
+npx @eshaank08/agentcheck audit --path /home/user/projects/crm-agent
 ```
 
 **What gets extracted (never raw code):**
@@ -80,7 +80,7 @@ source ~/.zshrc
 ### Offline / No-API mode
 
 ```bash
-npx agentcheck audit --path ./my-agent --no-ai
+npx @eshaank08/agentcheck audit --path ./my-agent --no-ai
 ```
 
 Static analysis runs entirely locally, covering all 10 OWASP Agentic AI checks. No network connection needed.
