@@ -1,6 +1,6 @@
 {
   "name": "@eshaank08/agentcheck",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Open source CLI that audits AI agents for security, performance, and model fit",
   "main": "dist/index.js",
   "bin": {
