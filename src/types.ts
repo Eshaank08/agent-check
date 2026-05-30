@@ -77,6 +77,7 @@ export interface AuditOptions {
   path?: string;
   noAi: boolean;
   json?: boolean;
+  interactive?: boolean;
 }
 
 export interface AuditResult {

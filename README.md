@@ -1,5 +1,9 @@
 # AgentCheck
 
+[![CI](https://github.com/Eshaank08/agent-check/actions/workflows/ci.yml/badge.svg)](https://github.com/Eshaank08/agent-check/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@eshaank08/agentcheck)](https://www.npmjs.com/package/@eshaank08/agentcheck)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **The security auditor for AI agents.**
 
 AgentCheck is an open-source CLI that scans your AI agent for security vulnerabilities, architectural risks, and cost inefficiencies — in under 60 seconds. No account required. Works offline.
@@ -137,6 +141,8 @@ Model pricing is fetched live from [OpenRouter's free public API](https://openro
 
 Rules are based on the [OWASP Agentic AI Top 10 (2026)](https://owasp.org/www-project-top-10-for-large-language-model-applications/).
 
+> **Note:** Static analysis uses heuristic pattern matching on tool names and code signals. It will catch real structural risks but may produce false positives — review each finding in the context of your agent's actual behaviour. The AI layer (`ANTHROPIC_API_KEY`) adds architectural reasoning that reduces noise significantly.
+
 ### Scoring
 
 Each audit produces three scores:
@@ -150,53 +156,54 @@ Each audit produces three scores:
 
 ## Sample Output
 
+Real output from scanning a production multi-agent system (45 files, 11 sub-agents):
+
 ```
 ════════════════════════════════════════════════════════
                 AgentCheck Audit Report
-                     Agent: crm-agent
-             Scanned: 5/30/2026, 9:15:00 AM
+                     Agent: unnamed
+            Scanned: 30/5/2026, 10:31:44 am
+         Path: ./donna/backend
+                       Files: 45
 ════════════════════════════════════════════════════════
 
 STATIC ANALYSIS
 ────────────────────────────────────────────────────────
   ❌ CRITICAL  Prompt Injection Risk
-             Agent reads external content (web/email) and has write
-             tools — high prompt injection risk.
+             Agent reads external content (web/email/files) and has
+             write/delete tools — high prompt injection risk.
+             📍 Tools with external read + write/delete permissions
 
-  ❌ CRITICAL  No Human Approval on Sensitive Action
-             Tool "send_email" performs a sensitive action without
-             requiring human confirmation.
+  ⚠️  MEDIUM    Context Window Overflow Risk
+             Agent has 46 tools. At this scale, tool definitions alone
+             can consume a significant portion of the context window.
+             📍 46 tools registered
 
-  ❌ HIGH      Over-permissioned Tool
-             Tool "crm_records" has delete permission. Verify this
-             is the minimum required for the task.
-
-  ✅ PASSED   No hardcoded credentials detected
-  ✅ PASSED   No self-modifying agent patterns detected
-
-AI ANALYSIS
-────────────────────────────────────────────────────────
-  ⚠  Agent is described as read-only but has 3 write tools
-  ⚠  No fallback defined if send_email tool fails mid-workflow
-
-MOST CRITICAL FIX
-────────────────────────────────────────────────────────
-  Add a human approval gate before send_email executes — a single
-  prompt injection could silently send emails to all contacts.
-
-MODEL RECOMMENDATION
-────────────────────────────────────────────────────────
-  ★ Recommended
-  claude-haiku-4-5 (Anthropic)  ~$18/month at 100 calls/day
-  95% quality match — task complexity doesn't require Sonnet
+  ✅ PASSED   Over-permissioned Tools
+  ✅ PASSED   Human Approval
+  ✅ PASSED   Hardcoded Credentials
+  ✅ PASSED   Tool Scope
+  ✅ PASSED   Error Handling
+  ✅ PASSED   Sub-agent Permissions
+  ✅ PASSED   Output Validation
+  ✅ PASSED   PII Exposure
+  ✅ PASSED   Rate Limiting
+  ✅ PASSED   Self-modification
+  ✅ PASSED   Audit Logging
+  ✅ PASSED   Input Validation
+  ✅ PASSED   Tool Timeout
+  ✅ PASSED   Idempotency
+  ✅ PASSED   Fallback Model
+  ✅ PASSED   Session Isolation
+  ✅ PASSED   Memory Retention
 
 SUMMARY
 ────────────────────────────────────────────────────────
-  Security Score:     3/10  ✗
-  Performance Score:  6/10  ⚠
-  Cost Efficiency:    4/10  ✗
+  Security Score:     6.5/10  ⚠
+  Performance Score:  9/10    ✓
+  Cost Efficiency:    5/10    ⚠
 
-  Overall Score:      42/100  ✗
+  Overall Score:      70/100  ⚠
 ════════════════════════════════════════════════════════
 ```
 
@@ -206,8 +213,9 @@ SUMMARY
 
 | Flag | Description |
 |------|-------------|
-| `--path <dir>` | Scan a source directory instead of using interactive mode |
-| `--no-ai` | Static analysis only — no API key needed, no external calls |
+| `--path <dir>` | Scan a specific source directory |
+| `--interactive` | Force interactive mode — answer questions, no source code needed |
+| `--no-ai` | Static analysis only — no API key, no network |
 | `--json` | Output raw JSON — useful for CI pipelines and scripting |
 | `--version` | Print version |
 | `--help` | Show help |

@@ -9,28 +9,8 @@ import { printReport, printAiPrivacyNotice } from '../output/report';
 export async function runAudit(options: AuditOptions): Promise<void> {
   let metadata;
 
-  // Determine input mode — default to scanning current directory, fall back to interactive
-  const scanPath = options.path ?? '.';
-  const isExplicitPath = !!options.path;
-
-  console.log(chalk.dim(`\nScanning ${scanPath} ...`));
-  try {
-    metadata = await scanDirectory(scanPath);
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(chalk.red(`\nScan failed: ${msg}`));
-    process.exit(1);
-  }
-
-  if ((metadata.filesScanned ?? 0) === 0) {
-    if (isExplicitPath) {
-      console.log(chalk.yellow('\nNo supported files found in the given path.'));
-      console.log(chalk.dim('Supported: .py, .ts, .js, .json, .yaml, .yml, .env'));
-      process.exit(0);
-    }
-    // No files in current directory — fall back to interactive
-    console.log(chalk.yellow('No supported agent files found in current directory.'));
-    console.log(chalk.dim('Switching to interactive mode...\n'));
+  // --interactive flag bypasses file scanning entirely
+  if (options.interactive) {
     try {
       metadata = await runInteractive();
     } catch (err) {
@@ -39,7 +19,37 @@ export async function runAudit(options: AuditOptions): Promise<void> {
       process.exit(1);
     }
   } else {
-    console.log(chalk.dim(`Found ${metadata.filesScanned} file(s). Running analysis...`));
+    // Default: scan directory, fall back to interactive if no files found
+    const scanPath = options.path ?? '.';
+    const isExplicitPath = !!options.path;
+
+    console.log(chalk.dim(`\nScanning ${scanPath} ...`));
+    try {
+      metadata = await scanDirectory(scanPath);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(chalk.red(`\nScan failed: ${msg}`));
+      process.exit(1);
+    }
+
+    if ((metadata.filesScanned ?? 0) === 0) {
+      if (isExplicitPath) {
+        console.log(chalk.yellow('\nNo supported files found in the given path.'));
+        console.log(chalk.dim('Supported: .py, .ts, .js, .json, .yaml, .yml, .env'));
+        process.exit(0);
+      }
+      console.log(chalk.yellow('No supported agent files found in current directory.'));
+      console.log(chalk.dim('Switching to interactive mode...\n'));
+      try {
+        metadata = await runInteractive();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(chalk.red(`\nInteractive mode failed: ${msg}`));
+        process.exit(1);
+      }
+    } else {
+      console.log(chalk.dim(`Found ${metadata.filesScanned} file(s). Running analysis...`));
+    }
   }
 
   // Static analysis — always runs, no API key needed
