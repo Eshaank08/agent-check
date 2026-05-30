@@ -10,8 +10,8 @@ function printHelp(): void {
 ${chalk.bold.cyan('AgentCheck')} ${chalk.dim(`v${VERSION}`)} — AI agent security auditor
 
 ${chalk.bold('Usage:')}
-  npx agentcheck audit               Interactive mode (no path needed)
-  npx agentcheck audit --path ./dir  Scan an agent directory
+  npx agentcheck audit               Scan current directory (fallback to interactive if no files found)
+  npx agentcheck audit --path ./dir  Scan a specific agent directory
 
 ${chalk.bold('Options:')}
   --path <dir>   Path to agent source directory

@@ -1,4 +1,5 @@
 src/
 .github/
 tsconfig.json
-*.map
+dist/**/*.map
+dist/test/
