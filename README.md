@@ -1,121 +1,150 @@
 # AgentCheck
 
-Open source CLI that audits AI agents for security vulnerabilities, performance issues, and model fit — in under 60 seconds.
+**The security auditor for AI agents.**
+
+AgentCheck is an open-source CLI that scans your AI agent for security vulnerabilities, architectural risks, and cost inefficiencies — in under 60 seconds. No account required. Works offline.
+
+```bash
+npx @eshaank08/agentcheck audit
+```
+
+---
+
+## What is AgentCheck?
+
+When you build an AI agent — something that uses tools, makes decisions, and acts on the world — you introduce a new class of security risk that traditional code scanners don't understand.
+
+An agent that can read emails and also delete files is a prompt injection waiting to happen. An agent with a `send_payment` tool and no human approval gate is a liability. A multi-agent system where sub-agents receive raw user input is an architectural flaw.
+
+AgentCheck catches these before they reach production.
+
+It runs two layers of analysis:
+
+1. **Static analysis** — 19 rule-based checks based on the OWASP Agentic AI Top 10 (2026). Runs entirely offline, no API key needed.
+2. **AI analysis** — Claude reasons about your agent's architecture and surfaces logical contradictions, workflow gaps, and the single most critical fix. Requires an Anthropic API key.
+
+Both layers output a scored report with specific findings and actionable fixes.
+
+---
 
 ## Quick Start
 
 ```bash
+# Interactive mode — answer questions about your agent, no code needed
 npx @eshaank08/agentcheck audit
-```
 
-No API key required for static analysis.
+# File scan mode — point it at your agent's source directory
+npx @eshaank08/agentcheck audit --path ./my-agent
+
+# Fully offline — static analysis only, no API key, no network
+npx @eshaank08/agentcheck audit --path ./my-agent --no-ai
+
+# Machine-readable output for CI pipelines
+npx @eshaank08/agentcheck audit --path ./my-agent --json
+```
 
 ---
 
-## Two Audit Modes
+## Two Modes
 
-### Mode 1 — Interactive (no code needed)
+### Interactive Mode
 
-Answer a few structured questions about your agent in the terminal. No source code required.
+No source code required. AgentCheck asks you a series of structured questions in the terminal and runs analysis based on your answers.
 
 ```bash
 npx @eshaank08/agentcheck audit
 ```
 
-AgentCheck will ask about:
+You'll be asked about:
 - Agent name and purpose
-- Which model you're using
+- Which model you're using and approximate daily call volume
 - Tool names and their permissions (read / write / delete / execute)
-- Sub-agents and how they're orchestrated
-- Whether you have human approval gates
-- Approximate daily call volume
+- Whether you have sub-agents and how they're orchestrated
+- Whether human approval gates exist for sensitive actions
 
-### Mode 2 — File Scan
+Takes about 2 minutes. Useful when you want a quick sanity check or don't have the source code in front of you.
 
-Point AgentCheck at your agent source directory. It recursively scans `.py`, `.ts`, `.js`, `.json`, `.yaml`, and `.env` files, extracts structural metadata, and runs analysis — without sending your code to any external service.
+### File Scan Mode
+
+Point AgentCheck at your agent's source directory. It recursively scans `.py`, `.ts`, `.js`, `.json`, `.yaml`, `.yml`, and `.env` files, extracts structural metadata, and runs the full analysis — without sending your source code anywhere.
 
 ```bash
 npx @eshaank08/agentcheck audit --path ./my-agent
-npx @eshaank08/agentcheck audit --path /home/user/projects/crm-agent
 ```
 
-**What gets extracted (never raw code):**
-- Tool names and inferred permissions
-- Model identifiers
-- System prompt presence (not content)
-- Sub-agent patterns
-- Error handling and rate limiting signals
-- Potential hardcoded credentials (file + line number flagged)
+**What gets extracted from your code:**
+- Tool function names and inferred permission levels
+- Model identifiers (e.g. `claude-sonnet-4-6`, `gpt-4o`)
+- Whether a system prompt is present (not its content)
+- Sub-agent patterns and orchestration signals
+- Error handling, rate limiting, timeout, and input validation signals
+- Potential hardcoded credentials (flagged by file path and line number only — the value is never read)
+
+**What never leaves your machine:**
+- Source code
+- System prompt content
+- Tool implementation logic
+- Customer or user data
 
 ---
 
-## Environment Setup
+## AI-Powered Analysis
 
-For AI-powered analysis (recommended), set your Anthropic API key:
+For deeper analysis, set your Anthropic API key:
 
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-Then run the audit as normal. AgentCheck will automatically use the AI reasoning layer.
+AgentCheck will automatically use the AI reasoning layer. Claude receives only the extracted metadata — tool names, permission flags, model name, and static findings — and returns:
 
-To make this permanent, add it to your shell profile (`~/.zshrc`, `~/.bashrc`, etc.):
+- **Logical contradictions** — e.g. an agent described as "read-only" that has write tools
+- **Sub-agent trust issues** — permission boundary violations in multi-agent setups
+- **Workflow gaps** — what happens when a tool fails mid-execution
+- **Permission analysis** — unjustified permission levels given the stated purpose
+- **Model recommendations** — 3 alternatives with live pricing and monthly cost estimates
+- **Most critical fix** — the single highest-priority issue to address immediately
 
-```bash
-echo 'export ANTHROPIC_API_KEY=sk-ant-...' >> ~/.zshrc
-source ~/.zshrc
-```
-
----
-
-## Flags
-
-| Flag | Description |
-|------|-------------|
-| `--path <dir>` | Scan a directory instead of using interactive mode |
-| `--no-ai` | Run static analysis only — no API key needed, no external calls |
-| `--version` | Print version |
-| `--help` | Show help |
-
-### Offline / No-API mode
-
-```bash
-npx @eshaank08/agentcheck audit --path ./my-agent --no-ai
-```
-
-Static analysis runs entirely locally, covering all 10 OWASP Agentic AI checks. No network connection needed.
+Model pricing is fetched live from [OpenRouter's free public API](https://openrouter.ai/api/v1/models) (5-second timeout, falls back to static catalog if unavailable). No API key required for pricing.
 
 ---
 
 ## What AgentCheck Checks
 
-### Static Analysis (always runs, no API key needed)
+### Static Rules (always run, no API key needed)
 
-Based on the [OWASP Agentic AI Top 10 (2026)](https://owasp.org/www-project-top-10-for-large-language-model-applications/):
-
-| Rule | Severity | Description |
-|------|----------|-------------|
-| OAA-01 | CRITICAL | Prompt injection vulnerability patterns |
-| OAA-02 | HIGH | Over-permissioned tools (write/delete where read suffices) |
-| OAA-03 | CRITICAL | Missing human approval on sensitive actions |
-| OAA-04 | CRITICAL | Hardcoded secrets or API keys |
-| OAA-05 | MEDIUM | Tool scope creep |
-| OAA-06 | MEDIUM | Missing error handling for tool failures |
-| OAA-07 | HIGH | Unconstrained sub-agent permissions |
-| OAA-08 | MEDIUM | No output validation layer |
-| OAA-09 | HIGH | PII exposure in tool outputs |
+| Rule | Severity | What it catches |
+|------|----------|-----------------|
+| OAA-01 | CRITICAL | Prompt injection — external input tools combined with write/delete permissions |
+| OAA-02 | HIGH | Over-permissioned tools — delete/execute/admin where read would suffice |
+| OAA-03 | CRITICAL | Missing human approval on sensitive actions (email, payment, deploy, delete) |
+| OAA-04 | CRITICAL | Hardcoded credentials — API keys, secrets, bearer tokens in source files |
+| OAA-05 | MEDIUM | Tool scope creep — tools inconsistent with the agent's stated purpose |
+| OAA-06 | MEDIUM | Missing error handling — no fallback strategy for tool failures |
+| OAA-07 | HIGH | Unconstrained sub-agent permissions — raw user input passed to sub-agents |
+| OAA-08 | MEDIUM | No output validation — agent outputs not checked before use |
+| OAA-09 | HIGH | PII exposure — user/customer data tools with no output validation |
 | OAA-10 | MEDIUM | Missing rate limiting on external API tools |
+| OAA-11 | CRITICAL | Self-modifying agent — tools that can overwrite the system prompt |
+| OAA-12 | HIGH | No audit logging on write/delete/execute operations |
+| OAA-13 | MEDIUM | Missing input validation before data reaches tools |
+| OAA-14 | HIGH | No tool timeout — external tools can hang indefinitely |
+| OAA-15 | MEDIUM | Non-idempotent write operations — duplicate calls could corrupt data |
+| OAA-16 | MEDIUM | Context window overflow risk from large tool surface |
+| OAA-17 | LOW | No fallback model at high call volume |
+| OAA-18 | HIGH | Missing session isolation — cross-tenant data access risk |
+| OAA-19 | MEDIUM | Unconstrained memory retention — no TTL on agent memory or vector store |
 
-### AI Analysis (requires `ANTHROPIC_API_KEY`)
+Rules are based on the [OWASP Agentic AI Top 10 (2026)](https://owasp.org/www-project-top-10-for-large-language-model-applications/).
 
-Claude reasons about your agent's architecture and provides:
+### Scoring
 
-- **Logical contradictions** — tools that conflict with stated purpose
-- **Sub-agent trust issues** — orchestrator/sub-agent permission boundaries
-- **Workflow gaps** — what happens when a tool fails mid-workflow
-- **Permission logic** — unjustified permission levels
-- **Model recommendations** — top 3 alternatives with monthly cost estimates
-- **Most critical fix** — the one thing to address immediately
+Each audit produces three scores:
+
+- **Security Score (0–10)** — weighted by finding severity. CRITICAL findings are penalised 3×.
+- **Performance Score (0–10)** — tracks reliability risk from HIGH findings (missing error handling, timeouts, etc.)
+- **Cost Efficiency Score (0–10)** — provided by the AI layer based on model fit and call volume. Defaults to 5 in static-only mode.
+- **Overall Score (0–100)** — weighted composite: security 50%, performance 30%, cost 20%.
 
 ---
 
@@ -125,11 +154,15 @@ Claude reasons about your agent's architecture and provides:
 ════════════════════════════════════════════════════════
                 AgentCheck Audit Report
                      Agent: crm-agent
-             Scanned: 5/28/2026, 3:45:00 PM
+             Scanned: 5/30/2026, 9:15:00 AM
 ════════════════════════════════════════════════════════
 
 STATIC ANALYSIS
 ────────────────────────────────────────────────────────
+  ❌ CRITICAL  Prompt Injection Risk
+             Agent reads external content (web/email) and has write
+             tools — high prompt injection risk.
+
   ❌ CRITICAL  No Human Approval on Sensitive Action
              Tool "send_email" performs a sensitive action without
              requiring human confirmation.
@@ -139,45 +172,108 @@ STATIC ANALYSIS
              is the minimum required for the task.
 
   ✅ PASSED   No hardcoded credentials detected
+  ✅ PASSED   No self-modifying agent patterns detected
 
 AI ANALYSIS
 ────────────────────────────────────────────────────────
-  💡 Agent is described as read-only but has 3 write tools
+  ⚠  Agent is described as read-only but has 3 write tools
+  ⚠  No fallback defined if send_email tool fails mid-workflow
+
+MOST CRITICAL FIX
+────────────────────────────────────────────────────────
+  Add a human approval gate before send_email executes — a single
+  prompt injection could silently send emails to all contacts.
 
 MODEL RECOMMENDATION
 ────────────────────────────────────────────────────────
-  Recommended
-  claude-haiku-4-5 (Anthropic)  ~$18/month
-  95% quality match — Simpler task type; Haiku handles it at 10x lower cost
+  ★ Recommended
+  claude-haiku-4-5 (Anthropic)  ~$18/month at 100 calls/day
+  95% quality match — task complexity doesn't require Sonnet
 
 SUMMARY
 ────────────────────────────────────────────────────────
-  Security Score:     4/10  ✗
-  Performance Score:  7/10  ⚠
-  Cost Efficiency:    3/10  ✗
+  Security Score:     3/10  ✗
+  Performance Score:  6/10  ⚠
+  Cost Efficiency:    4/10  ✗
 
-  Overall Score:      47/100  ✗
+  Overall Score:      42/100  ✗
 ════════════════════════════════════════════════════════
+```
+
+---
+
+## Flags
+
+| Flag | Description |
+|------|-------------|
+| `--path <dir>` | Scan a source directory instead of using interactive mode |
+| `--no-ai` | Static analysis only — no API key needed, no external calls |
+| `--json` | Output raw JSON — useful for CI pipelines and scripting |
+| `--version` | Print version |
+| `--help` | Show help |
+
+---
+
+## CI Integration
+
+Use `--json` to pipe results into your pipeline:
+
+```bash
+npx @eshaank08/agentcheck audit --path ./agent --no-ai --json > audit-report.json
+```
+
+Or fail a build on any CRITICAL finding:
+
+```bash
+RESULT=$(npx @eshaank08/agentcheck audit --path ./agent --no-ai --json)
+CRITICALS=$(echo "$RESULT" | jq '[.staticFindings[] | select(.severity == "CRITICAL" and .passed == false)] | length')
+if [ "$CRITICALS" -gt 0 ]; then
+  echo "Audit failed: $CRITICALS critical finding(s)"
+  exit 1
+fi
 ```
 
 ---
 
 ## Privacy
 
-**What is NOT sent to Anthropic:**
+AgentCheck is designed to be privacy-safe by construction.
+
+**Never sent anywhere:**
 - Your source code
 - System prompt content
 - Tool implementation logic
-- Any customer or user data
+- Customer or user data
 
-**What IS sent to Anthropic (AI layer only):**
+**Sent to Anthropic only when `ANTHROPIC_API_KEY` is set and `--no-ai` is not passed:**
 - Tool names and permission levels
 - Agent description (from interactive input or package.json)
 - Model name
 - Boolean flags: error handling present, rate limiting present, etc.
-- Static analysis findings (rule IDs and severity levels)
+- Static analysis findings (rule IDs and severity — not your code)
 
-AgentCheck prints a privacy notice before running AI analysis. Use `--no-ai` to disable all external calls entirely.
+AgentCheck prints a privacy notice before running AI analysis. Use `--no-ai` to disable all external calls entirely, including model pricing.
+
+---
+
+## Requirements
+
+- Node.js 18 or later
+- No installation required — `npx` handles it
+
+---
+
+## Contributing
+
+Issues and pull requests are welcome. The rules live in `src/rules/owasp.ts` and the checks in `src/layers/static.ts` — both are straightforward to extend.
+
+```bash
+git clone https://github.com/Eshaank08/agent-check.git
+cd agent-check
+npm install
+npm run build
+npm test
+```
 
 ---
 
@@ -193,4 +289,4 @@ MIT — see [LICENSE](LICENSE)
 
 ---
 
-## Built by [Eshaank08](https://github.com/Eshaank08)
+Built by [Eshaank08](https://github.com/Eshaank08)
